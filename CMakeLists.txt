@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(nn_simple VERSION 1.0)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 
@@ -19,4 +19,5 @@ file(GLOB_RECURSE MY_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp )
 add_executable(nn_simple ${MY_SOURCE})
 
 target_include_directories(nn_simple  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(nn_simple PRIVATE eigen sqlite3)
+target_link_libraries(nn_simple eigen )
+target_link_libraries(nn_simple sqlite3)
