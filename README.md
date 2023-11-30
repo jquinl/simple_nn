@@ -1,5 +1,5 @@
 # Simple_nn
-Simple neural network build with C++, for learning purposes
+Simple neural network built with C++, for learning purposes
 # How to build
 
 ```
