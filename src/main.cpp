@@ -30,7 +30,8 @@ struct Layer{
     }
 
     Eigen::MatrixXf ForwardPropagate(const Eigen::MatrixXf& input){
-        return a_fn.act_fn((w * input.transpose()).colwise() + b);
+        Eigen::MatrixXf it = (w * input.transpose()).colwise() + b;
+        return a_fn.act_fn(it);
     }
     void BackPropagate(){
 
@@ -51,25 +52,23 @@ int main(int argc, char *argv[]){
     actfn_ptr sigmoid_d =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.array() * ((1.0f - m.array())));};
 
     actfn_ptr relu   =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.cwiseMax(0));};
-    //actfn_ptr relu_d =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.array() * ((1.0f - m.array())));};
+    //actfn_ptr relu_d =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.cwiseGreater(0));};
     Afunc activ_sigmoid = Afunc{
                     sigmoid,
                     sigmoid_d
                 };
-
+    Afunc activ_relu = Afunc{
+                    relu,
+                    relu
+                };
     //Input 
     Eigen::MatrixXf x = Eigen::MatrixXf::Random(input_layer_size,input_vector_size);
 
-    Eigen::MatrixXf m = Eigen::MatrixXf::Random(first_layer_size,input_vector_size) * 0.5f;
-    Eigen::VectorXf b = Eigen::VectorXf::Random(first_layer_size) *0.5f;
-    Eigen::MatrixXf l1 = (m * x.transpose()).colwise() + b;
-
-
     Layer l1_cls(input_vector_size,input_layer_size,activ_sigmoid);
-    DEBUG_PRINT(activ_sigmoid.act_dfn(l1));
-    DEBUG_PRINT(activ_sigmoid.act_dfn(l1));
-    DEBUG_PRINT(activ_sigmoid.act_fn(l1));
-    DEBUG_PRINT(l1_cls.ForwardPropagate(x));
+    Layer l2_cls(input_layer_size,second_layer_size,activ_relu);
 
+    Eigen::MatrixXf m2 = l2_cls.ForwardPropagate(l1_cls.ForwardPropagate(x));
+
+    DEBUG_PRINT(m2);
     return 0;
 }
