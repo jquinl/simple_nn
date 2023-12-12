@@ -37,31 +37,49 @@ struct Layer{
 
     }
 };
+Eigen::MatrixXf OneHot( const Eigen::VectorXi& labels ){
+    DEBUG_PRINT(labels);
+    std::cout<<labels.maxCoeff()+1<<std::endl;
+    Eigen::MatrixXf oneh = Eigen::MatrixXf::Zero(labels.size(),labels.maxCoeff()+1);
+    DEBUG_PRINT(oneh);
+    DEBUG_PRINT(oneh(Eigen::VectorXi::LinSpaced(labels.maxCoeff(),0,labels.maxCoeff()),labels));
+    return oneh;
+}
 int main(int argc, char *argv[]){
 
     //Input layer 
-    int input_vector_size = 25;//<--- size of a single datapoint
+    int input_vector_size = 5;//<--- size of a single datapoint
     int input_layer_size = 10;//<--- Number of training poìnts
+
+    Eigen::VectorXi label_data =Eigen::VectorXi::LinSpaced(10,1,10);
+    OneHot(label_data);
 
     //first layer 
     int first_layer_size = 10;//<--- Size of the first layer
     int second_layer_size = 20;//<--- Size of the first layer
 
+   // actfn_ptr softmax   =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.exp()/m.exp().sum());};
+  //  actfn_ptr softmax_d =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.exp()/m.exp().sum());};
 
     actfn_ptr sigmoid   =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(1.0f/(1.0f + m.array().exp()));};
     actfn_ptr sigmoid_d =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.array() * ((1.0f - m.array())));};
 
     actfn_ptr relu   =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.cwiseMax(0));};
-    //actfn_ptr relu_d =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.cwiseGreater(0));};
+    actfn_ptr relu_d =  *[]( Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.cwiseGreater(0).cast<float>());};
+
+  //  Afunc activ_softmax = Afunc{
+  //                  softmax,
+  //                  softmax_d
+  //              };
     Afunc activ_sigmoid = Afunc{
                     sigmoid,
                     sigmoid_d
                 };
     Afunc activ_relu = Afunc{
                     relu,
-                    relu
+                    relu_d
                 };
-    //Input 
+
     Eigen::MatrixXf x = Eigen::MatrixXf::Random(input_layer_size,input_vector_size);
 
     Layer l1_cls(input_vector_size,input_layer_size,activ_sigmoid);
