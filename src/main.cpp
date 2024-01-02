@@ -1,9 +1,10 @@
-#include <iostream>
 #include <vector>
 #include <Eigen/Core>
 #include <Eigen/Dense>
-#include <sqlite3.h>
 
+#include <fstream>
+#include <sstream>
+#include <iostream>
 
 #define DEBUG_SHAPE(x) std::cout<< "("<< x.rows()<<","<<x.cols()<<")"<<"("<< x.size()<<")"<< std::endl
 #define DEBUG_SHOW_MATRIX(x) std::cout << "(" << x << ")" << "("<< x.rows()<<","<<x.cols()<<")"<<"("<< x.size()<<")"<< std::endl
@@ -31,7 +32,6 @@ struct Layer{
         b(Eigen::VectorXf::Random(layer_size) *0.5f)
         {
     }
-
     const Eigen::MatrixXf ForwardPropagate(const Eigen::MatrixXf& input){
         Eigen::MatrixXf it = (w * input).colwise() + b;
         return act.fn(it);
@@ -100,7 +100,6 @@ public:
                 adv += layers[i]->l_size *  n_data;
             }
 
-            //back Prop
             float* dws_p = dws + dw_size;
             float* dbs_p = dbs + db_size;
             {
@@ -205,29 +204,68 @@ public:
         delete[] dws;
     }
 
-private:
-    Eigen::MatrixXf BackPropagateOut(const Eigen::MatrixXf& a_c , const Eigen::MatrixXf& out_onehot){
-        return a_c - out_onehot;
-    }
-    Eigen::MatrixXf BackPropagateDz(const Layer& c_layer ,const Layer& n_layer, const Eigen::MatrixXf& a_c, const Eigen::MatrixXf& dz_next){
-        return (n_layer.w.transpose() * dz_next).cwiseProduct(c_layer.act.dfn(a_c)) ;
-    }
-    Eigen::MatrixXf BackPropagateWB(const Layer& p_layer,Eigen::MatrixXf& dz){
-     //   Eigen::MatrixXf dw = 1.f/n_out * (dz * p_layer.a.transpose());
-        Eigen::VectorXf db = 1.f/n_out * dz.colwise().sum();
-        //Change this
-        return db;
+    Eigen::MatrixXf Predict(const Eigen::MatrixXf& prediction_data){
+        return prediction_data;
     }
 };
+Eigen::MatrixXf CSVToMatrix(std::string filename){
+    std::ifstream input(filename);
+    if(!input.is_open()){
+        std::cerr << "Could not read file: "<< filename << "\n";
+        return Eigen::MatrixXf::Zero(1,1);
+    }
+    int input_vec_size = 0;
+    int input_set_size = 1;
+    {
+        std::string line;
+        std::getline(input, line);
+        std::istringstream ss(std::move(line));
+        for (std::string value; std::getline(ss, value, ',');) {
+            input_vec_size++;
+            }
+        for ( line; std::getline(input, line);) {
+            input_set_size++;
+        }
+    }
+    //Go back to beggining to read and push to matrix
+    input.clear();
+    input.seekg(0, std::ios::beg);
+    Eigen::MatrixXf ret = Eigen::MatrixXf::Zero(input_vec_size,input_set_size);
+    float* ret_p = (float*) ret.data();
+
+    float* in_vec = new float[input_vec_size];
+    Eigen::Map<Eigen::VectorXf> in_vec_m(
+                    in_vec, input_vec_size
+                );
+    int adv = 0;
+    for (std::string line; std::getline(input, line);) {
+        std::istringstream ss(std::move(line));
+        float* in_p = in_vec;
+        for (std::string value; std::getline(ss, value, ',');) {
+            *in_p = std::stof(value);
+            in_p++;
+        }
+
+        Eigen::Map<Eigen::VectorXf> ret_vec_m(
+                    ret_p + input_vec_size * adv , input_vec_size
+                );
+
+        ret_vec_m << in_vec_m;
+
+        adv++;
+    }
+    delete[] in_vec;
+    return ret;
+}
 int main(int argc, char *argv[]){
 
     //Input layer
-    int input_vector_size = 5;//<--- size of a single datapoint
-    int training_points = 10;//<--- Number of training poìnts
+    Eigen::MatrixXf data = CSVToMatrix("mnist_train.csv");
+    Eigen::MatrixXf x = data(Eigen::placeholders::all,1).transpose();
+    Eigen::VectorXi label_data = Eigen::VectorXf(data(Eigen::placeholders::all,0)).cast<int>();
 
-    Eigen::MatrixXf x = Eigen::MatrixXf::Random(training_points,input_vector_size).transpose();
-    Eigen::VectorXi label_data(training_points);
-    label_data <<  1,3,4,3,5,4,2,1,4,2;
+    int input_vector_size = x.rows();//<--- size of a single datapoint
+    int training_points = x.cols();//<--- Number of training poìnts
 
     //Layer sizes
     int first_layer_size  = 10;//<--- Size of the first layer
@@ -261,7 +299,6 @@ int main(int argc, char *argv[]){
     Layer l3_cls(second_layer_size,output_layer_size,activ_softmax);
 
     std::vector<Layer*> layers{&l1_cls,&l2_cls,&l3_cls};
-
 
     Eigen::MatrixXf onehot = OneHot(label_data);
 
