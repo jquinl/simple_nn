@@ -50,9 +50,9 @@ Eigen::MatrixXf OneHot( const Eigen::VectorXi& labels ){
     return oneh.transpose();
 }
 class NNCateg{
+    std::vector<Layer*> layers;
     float alpha;
     float n_out;
-    std::vector<Layer*> layers;
 public:
     NNCateg(std::vector<Layer*> layers,float alpha,int n_output)
         :layers(layers),alpha(alpha),n_out(float(n_output)){}
@@ -63,20 +63,22 @@ public:
         int l_sz = layers.size();
         int n_data = train_data_x.cols();
 
-        int t_size,dw_size,db_size,dz_size = 0;
+        int t_size = 0, dw_size = 0,db_size = 0,dz_size = 0;
 
         for (int i = 0; i< l_sz; i++){
-            t_size+= layers[i]->l_size * n_data;
+            t_size  += layers[i]->l_size * n_data;
             dw_size += layers[i]->l_size * layers[i]->in_size;
             db_size += layers[i]->l_size;
-            dz_size = dz_size < (layers[i]->l_size * n_data) ? (layers[i]->l_size * n_data) : dz_size;
+            dz_size =  dz_size < (layers[i]->l_size * n_data) ? (layers[i]->l_size * n_data) : dz_size;
         }
-
-        float* dws = new float[dw_size];
-        float* dbs = new float[db_size];
-        float* dzs = new float[dz_size];
-        float* l_out = new float[t_size];
-
+        //float* l_out = new float[t_size];
+        //float* dws   = new float[dw_size];
+        //float* dbs   = new float[db_size];
+        //float* dzs   = new float[dz_size];
+        float* l_out = new float[t_size + dw_size + db_size +dz_size];
+        float* dws   = l_out + t_size;
+        float* dbs   = dws + dw_size;
+        float* dzs   = dbs + db_size;
         for (int s = 0; s< steps; s++){
             //Forward Prop
             {
@@ -99,7 +101,6 @@ public:
 
                 adv += layers[i]->l_size *  n_data;
             }
-
             float* dws_p = dws + dw_size;
             float* dbs_p = dbs + db_size;
             {
@@ -198,14 +199,50 @@ public:
             }
         }
 
+        //delete[] dzs;
+        //delete[] dbs;
+        //delete[] dws;
         delete[] l_out;
-        delete[] dzs;
-        delete[] dbs;
-        delete[] dws;
     }
 
-    Eigen::MatrixXf Predict(const Eigen::MatrixXf& prediction_data){
-        return prediction_data;
+    Eigen::MatrixXf Predict(const Eigen::MatrixXf& prediction_data_x){
+        int l_sz = layers.size();
+        int n_data =  prediction_data_x.cols();
+
+        int t_size = layers[0]->l_size * n_data;
+
+        for (int i = 1; i< l_sz; i++){
+            t_size = layers[i]->l_size * n_data > t_size ? layers[i]->l_size * n_data  : t_size;
+        }
+
+        float* l_out = new float[t_size];
+
+        {
+            Eigen::Map<Eigen::MatrixXf> a_layer(
+                l_out  , layers[0]->l_size, n_data
+            );
+            a_layer << layers[0]->ForwardPropagate(prediction_data_x);
+        }
+        for (int i = 1; i< l_sz-1; i++){
+
+            Eigen::Map<Eigen::MatrixXf> in_l (
+                l_out , layers[i-1]->l_size, n_data
+            );
+            Eigen::Map<Eigen::MatrixXf> a_layer(
+                l_out, layers[i]->l_size, n_data
+            );
+
+            a_layer << layers[i]->ForwardPropagate(in_l);
+        }
+
+        Eigen::Map<Eigen::MatrixXf> in_l (
+            l_out , layers[l_sz-2]->l_size, n_data
+        );
+        Eigen::MatrixXf ret = layers[l_sz-1]->ForwardPropagate(in_l);
+
+        delete[] l_out;
+
+        return ret;
     }
 };
 Eigen::MatrixXf CSVToMatrix(std::string filename){
@@ -223,7 +260,7 @@ Eigen::MatrixXf CSVToMatrix(std::string filename){
         for (std::string value; std::getline(ss, value, ',');) {
             input_vec_size++;
             }
-        for ( line; std::getline(input, line);) {
+        for (;std::getline(input, line);) {
             input_set_size++;
         }
     }
@@ -261,16 +298,18 @@ int main(int argc, char *argv[]){
 
     //Input layer
     Eigen::MatrixXf data = CSVToMatrix("mnist_train.csv");
+    Eigen::MatrixXf data_pred = CSVToMatrix("mnist_test.csv")(Eigen::placeholders::all,1).transpose();
     Eigen::MatrixXf x = data(Eigen::placeholders::all,1).transpose();
-    Eigen::VectorXi label_data = Eigen::VectorXf(data(Eigen::placeholders::all,0)).cast<int>();
-
+    Eigen::VectorXi y = Eigen::VectorXf(data(Eigen::placeholders::all,0)).cast<int>();
+    DEBUG_SHAPE(data_pred);
+    DEBUG_SHAPE(x);
     int input_vector_size = x.rows();//<--- size of a single datapoint
-    int training_points = x.cols();//<--- Number of training poìnts
+//    int training_points = x.cols();//<--- Number of training poìnts
 
     //Layer sizes
     int first_layer_size  = 10;//<--- Size of the first layer
     int second_layer_size = 20;//<--- Size of the first layer
-    int output_layer_size = label_data.maxCoeff()+1;//<---last layer output must coincide with data classes + 1
+    int output_layer_size = y.maxCoeff()+1;//<---last layer output must coincide with data classes + 1
 
     actfn_ptr softmax   =  *[](const  Eigen::MatrixXf &m) {return Eigen::MatrixXf( m.array().exp().rowwise() / m.array().exp().colwise().sum());};
   //actfn_ptr softmax_d =  *[]( const Eigen::MatrixXf &m) {return Eigen::MatrixXf(m.exp()/m.exp().sum());};
@@ -300,10 +339,11 @@ int main(int argc, char *argv[]){
 
     std::vector<Layer*> layers{&l1_cls,&l2_cls,&l3_cls};
 
-    Eigen::MatrixXf onehot = OneHot(label_data);
+    Eigen::MatrixXf onehot = OneHot(y);
 
     NNCateg nn(layers,0.1f,10.0f);
     nn.Train(x,onehot,10);
+    Eigen::MatrixXf p = nn.Predict(data_pred);
 
     return 0;
 }
